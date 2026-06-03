@@ -49,7 +49,7 @@ jobs:
           cfg() { trivy config . --skip-dirs k8s --severity HIGH,CRITICAL "$@"; }
           cfg --format sarif --output trivy-config.sarif --exit-code 0
           echo "::group::Trivy config findings"; cfg --format table --exit-code 1; echo "::endgroup::"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: trivy-sarif
@@ -74,7 +74,7 @@ jobs:
           echo "::group::Semgrep findings"
           semgrep scan $rulesets --exclude '*.sarif' --metrics off --error
           echo "::endgroup::"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: semgrep-sarif
