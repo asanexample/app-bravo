@@ -1,0 +1,68 @@
+name: Deploy
+
+# Thin caller. The supply-chain backbone lives in the app-team-unwritable asanexample/trusted-ci repo:
+#   build  -> build-sign.yml     builds from the Dockerfile, pushes to team-bravo/demo, cosign-signs the
+#                                image + attaches a CycloneDX SBOM (under trusted-ci's identity).
+#   provenance -> slsa-provenance.yml   attaches the SLSA build provenance (SLSA L3, isolated signer).
+#   deploy -> pins the signed digest into k8s/preprod and commits (GitOps source of truth for ArgoCD).
+# The two reusable workflows are SIBLING 1-level calls (never nested) so the OIDC cert identities are the
+# known per-team-isolated ones Kyverno verify-images / verify-attestations expect. Pins are by SHA.
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  id-token: write
+  contents: write
+
+jobs:
+  build:
+    # Don't re-trigger on the deploy job's own manifest commit.
+    if: "!startsWith(github.event.head_commit.message, 'deploy:')"
+    permissions:
+      id-token: write # OIDC: AWS (ECR push) + cosign keyless signing
+      contents: read
+    uses: asanexample/trusted-ci/.github/workflows/build-sign.yml@70fc4ba48c7aa66e988ca2d30c2327a2d98f49e7
+    with:
+      app: demo
+      tag: ${{ github.sha }}
+
+  provenance:
+    needs: build
+    permissions:
+      id-token: write
+      contents: read
+    uses: asanexample/trusted-ci/.github/workflows/slsa-provenance.yml@70fc4ba48c7aa66e988ca2d30c2327a2d98f49e7
+    with:
+      image: ${{ needs.build.outputs.image }}
+      digest: ${{ needs.build.outputs.digest }}
+
+  # Gated on BOTH build and provenance so the digest ArgoCD picks up already carries its signature, SBOM
+  # AND provenance — no window where Kyverno's Enforce verify-attestations would reject it.
+  deploy:
+    needs: [build, provenance]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Pin manifest to the signed digest
+        env:
+          IMAGE: ${{ needs.build.outputs.image }}
+          DIGEST: ${{ needs.build.outputs.digest }}
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          sed -i "s|image: .*|image: ${IMAGE}@${DIGEST}|" k8s/preprod/deployment.yaml
+          # Update ONLY the VERSION env value (the line after `- name: VERSION`).
+          sed -i "/- name: VERSION/{n;s|value: \".*\"|value: \"${SHA}\"|}" k8s/preprod/deployment.yaml
+
+      - name: Commit and push manifest update
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add k8s/preprod/deployment.yaml
+          git diff --cached --quiet || git commit -m "deploy: update image to ${{ github.sha }}"
+          git push
