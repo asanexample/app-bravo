@@ -1,0 +1,14 @@
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: app-bravo
+  description: Team bravo's demo service
+  annotations:
+    github.com/project-slug: asanexample/app-bravo
+    argocd/app-name: bravo-demo
+    backstage.io/kubernetes-label-selector: app.kubernetes.io/name=app-bravo
+    backstage.io/kubernetes-namespace: team-bravo
+spec:
+  type: service
+  lifecycle: production
+  owner: bravo
