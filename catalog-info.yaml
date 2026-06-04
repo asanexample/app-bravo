@@ -12,3 +12,4 @@ spec:
   type: service
   lifecycle: production
   owner: bravo
+  system: bravo
