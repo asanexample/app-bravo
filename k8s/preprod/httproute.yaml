@@ -8,10 +8,12 @@ spec:
     - name: preprod-gateway
       namespace: default
       sectionName: https
-  # Must be in team-bravo's allow-list (the Tenant claim's `hostnames`), or admission rejects it
-  # (Kyverno restrict-route-hostnames-bravo).
+  # Placeholder only — the platform injects the real host (ADR-060: <app>-<team>.<baseDomain>, i.e.
+  # demo-bravo.preprod.aws.refplat.org) via an argocd-apps kustomize patch on /spec/hostnames/0. Do NOT
+  # hardcode a real host here; `.invalid` fails safe (admission-rejected, never a wrong host) if the patch
+  # ever doesn't apply.
   hostnames:
-    - demo-bravo.preprod.aws.refplat.org
+    - placeholder.invalid
   rules:
     - backendRefs:
         - name: app-bravo
