@@ -2,7 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: app-bravo
-  namespace: team-bravo
+  namespace: bravo-demo-dev
   labels:
     app: app-bravo
     app.kubernetes.io/name: app-bravo
