@@ -29,12 +29,12 @@ spec:
         - name: app-bravo
           # Pinned to the signed digest by the deploy workflow on each push to main. The :placeholder
           # tag is only the pre-first-deploy seed (ArgoCD is pointed here after CI pins a real digest).
-          image: 829808296602.dkr.ecr.us-east-1.amazonaws.com/team-bravo/demo@sha256:20f54c2e299cb0343d3c683076ee0d31334b9b7cc557d64f5066ac80076c8a44
+          image: 829808296602.dkr.ecr.us-east-1.amazonaws.com/team-bravo/demo@sha256:41baac68b4118b64b4eba0b2b92a5b095a66d6bdc634c99641af2b7f11bc58fc
           ports:
             - containerPort: 8080
           env:
             - name: VERSION
-              value: "9667e6f8038903bb74e315777d6a9f94199b1c10"
+              value: "311bbf0ab513c79e668f95dee719d840497e790e"
             - name: NAMESPACE
               valueFrom:
                 fieldRef:
