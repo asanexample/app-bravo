@@ -1,0 +1,12 @@
+# dev (the default stage). Single replica; the image digest is pinned by CI on each promote-by-PR (#377) —
+# the newTag line below is the seam CI rewrites to the signed digest.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../base
+replicas:
+  - name: app-bravo
+    count: 1
+images:
+  - name: 829808296602.dkr.ecr.us-east-1.amazonaws.com/team-bravo/demo-web
+    newTag: placeholder # CI replaces with the signed digest at deploy (promote-by-PR, #377)
