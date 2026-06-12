@@ -1,40 +1,15 @@
 name: Validate manifests
 
-# Shift-left Kyverno policy gate (platform ADR-014 Phase 4). Renders the platform tenant policies and
-# checks this app's manifests against them, failing the PR before merge — the same checks admission
-# enforces in-cluster. Cluster-free; no AWS creds/secrets. Admission remains the enforcement point. Both
-# steps use shared composite actions from the platform repo (no per-app logic to maintain).
+# v3 manifest validation (ADR-067). The v2 k8s/preprod Kyverno shift-left + preview-routing jobs were removed
+# at the cutover (k8s/preprod is gone). The envelope/image shift-left now lives at the platform level (the v3
+# gitops Gate, #388); this job validates the app's own overlay structure. Admission remains the enforcement point.
 on:
   pull_request:
 
 jobs:
-  kyverno:
-    name: Kyverno shift-left
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: asanexample/platform/.github/actions/kyverno-validate@main
-        with:
-          team: bravo
-          manifests-path: k8s/preprod
-
-  # Regression guard for platform issue #155 (ADR-032): PR preview environments apply a kustomize
-  # `namePrefix` (pr-<N>-). Gateway API HTTPRoute is a CRD, so without name-reference.yaml the prefixed
-  # preview HTTPRoute keeps pointing at the UN-prefixed (stable) Service. The shared action renders the
-  # overlay the way ArgoCD does and fails if any backendRef isn't rewritten.
-  preview-routing:
-    name: Preview routing (backendRef rewrite)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: asanexample/platform/.github/actions/preview-routing-check@main
-        with:
-          manifests-path: k8s/preprod
-
   # v3 layout guard (ADR-067 #376): the per-Product ApplicationSet syncs k8s/overlays/<stage> and injects the
   # namespace + host. Assert every stage overlay BUILDS and the base stays namespace-/host-agnostic (no
   # metadata.namespace; the placeholder host is the only one) and the image is product-scoped (team-bravo/demo-*).
-  # Additive alongside the v2 k8s/preprod jobs above; both layouts coexist until the cutover removes preprod/.
   overlays-build:
     name: v3 overlays build (ns-agnostic)
     runs-on: ubuntu-latest
