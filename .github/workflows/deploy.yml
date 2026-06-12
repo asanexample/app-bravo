@@ -1,12 +1,14 @@
 name: Deploy
 
-# Thin caller. The supply-chain backbone lives in the app-team-unwritable asanexample/trusted-ci repo:
-#   build  -> build-sign.yml     builds from the Dockerfile, pushes to team-bravo/demo, cosign-signs the
-#                                image + attaches a CycloneDX SBOM (under trusted-ci's identity).
+# Thin caller (v3 / ADR-067). The supply-chain backbone lives in the app-team-unwritable asanexample/trusted-ci
+# repo:
+#   build  -> build-sign.yml     builds from the Dockerfile, pushes to the PRODUCT-scoped repo team-bravo/demo-web,
+#                                cosign-signs the image + attaches a CycloneDX SBOM (under trusted-ci's identity).
 #   provenance -> slsa-provenance.yml   attaches the SLSA build provenance (SLSA L3, isolated signer).
-#   deploy -> pins the signed digest into k8s/preprod and commits (GitOps source of truth for ArgoCD).
-# The two reusable workflows are SIBLING 1-level calls (never nested) so the OIDC cert identities are the
-# known per-team-isolated ones Kyverno verify-images / verify-attestations expect. Pins are by SHA.
+#   deploy -> pins the signed digest into the dev overlay (k8s/overlays/dev) and commits — the GitOps source the
+#             per-Product ApplicationSet syncs. Promotion to test/uat/staging/prod is by PR (promote-by-PR, #377).
+# Pins are by SHA so the OIDC cert identities are the per-product ones Kyverno verify-images-product /
+# verify-attestations-product expect.
 
 on:
   push:
@@ -25,7 +27,7 @@ jobs:
       contents: read
     uses: asanexample/trusted-ci/.github/workflows/build-sign.yml@61c9f4b56859a85e5d7fedf2db7489dfa446caed
     with:
-      app: demo
+      app: demo-web # product-scoped image: team-bravo/demo-web (Product "demo", Service "web")
       tag: ${{ github.sha }}
 
   provenance:
@@ -38,8 +40,8 @@ jobs:
       image: ${{ needs.build.outputs.image }}
       digest: ${{ needs.build.outputs.digest }}
 
-  # Gated on BOTH build and provenance so the digest ArgoCD picks up already carries its signature, SBOM
-  # AND provenance — no window where Kyverno's Enforce verify-attestations would reject it.
+  # Gated on BOTH build and provenance so the digest the ApplicationSet picks up already carries its signature,
+  # SBOM AND provenance — no window where Kyverno's Enforce verify-*-product would reject it.
   deploy:
     needs: [build, provenance]
     runs-on: ubuntu-latest
@@ -48,21 +50,27 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Pin manifest to the signed digest
+      - name: Install yq
+        run: |
+          sudo curl -fsSL -o /usr/local/bin/yq https://github.com/mikefarah/yq/releases/download/v4.44.3/yq_linux_amd64
+          sudo chmod +x /usr/local/bin/yq
+
+      - name: Pin the dev overlay to the signed digest
         env:
           IMAGE: ${{ needs.build.outputs.image }}
           DIGEST: ${{ needs.build.outputs.digest }}
-          SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
-          sed -i "s|image: .*|image: ${IMAGE}@${DIGEST}|" k8s/preprod/deployment.yaml
-          # Update ONLY the VERSION env value (the line after `- name: VERSION`).
-          sed -i "/- name: VERSION/{n;s|value: \".*\"|value: \"${SHA}\"|}" k8s/preprod/deployment.yaml
+          # Replace the kustomize images entry's newTag with the immutable digest (kustomize pins by digest).
+          IMAGE="$IMAGE" DIGEST="$DIGEST" yq -i '
+            (.images[] | select(.name == strenv(IMAGE)))
+              |= (.digest = strenv(DIGEST) | del(.newTag))
+          ' k8s/overlays/dev/kustomization.yaml
 
       - name: Commit and push manifest update
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add k8s/preprod/deployment.yaml
-          git diff --cached --quiet || git commit -m "deploy: update image to ${{ github.sha }}"
+          git add k8s/overlays/dev/kustomization.yaml
+          git diff --cached --quiet || git commit -m "deploy: pin dev to ${{ github.sha }}"
           git push

@@ -10,8 +10,7 @@ Kubernetes manifests and the thin CI that builds, signs, and ships it.
 |------|---------|
 | `cmd/server/main.go`, `go.mod` | Minimal stdlib Go HTTP server: `/healthz` (probe) + `/` (JSON). No cloud deps. |
 | `Dockerfile` | Multi-stage build → distroless `nonroot` (uid 65532). The Dockerfile is the only language-specific surface. |
-| `k8s/base/` + `k8s/overlays/<stage>/` | **v3 layout (ADR-067).** Namespace-/host-agnostic `base/` + thin per-stage overlays (`dev`/`test`/`uat`/`staging`/`prod`). The per-Product ApplicationSet syncs `k8s/overlays/<stage>` and injects the namespace + host; each overlay pins the per-stage image digest. |
-| `k8s/preprod/` | **Legacy v2 layout** (single hardcoded `bravo-demo-dev` namespace), retained until the cutover removes it. |
+| `k8s/base/` + `k8s/overlays/<stage>/` | **The Kubernetes manifests (ADR-067).** Namespace-/host-agnostic `base/` + thin per-stage overlays (`dev`/`test`/`uat`/`staging`/`prod`). The per-Product ApplicationSet syncs `k8s/overlays/<stage>` and injects the namespace + host; `deploy.yml` pins the dev overlay's image digest (promotion to other stages is by PR). |
 | `.github/workflows/deploy.yml` / `preview.yml` | **Thin callers** of the shared supply-chain workflows in `asanexample/trusted-ci`. |
 | `.github/workflows/validate.yml` / `security.yml` | Shift-left Kyverno gate (shared composite actions) + Trivy/Semgrep SAST. |
 
@@ -19,12 +18,14 @@ Kubernetes manifests and the thin CI that builds, signs, and ships it.
 
 `deploy.yml` is ~3 small jobs that call shared, app-team-unwritable reusable workflows:
 
-1. **build** → `trusted-ci/build-sign.yml` — builds the image from the `Dockerfile`, pushes it to
-   `team-bravo/demo` in the platform ECR, cosign-keyless-signs it, and attaches a CycloneDX SBOM.
+1. **build** → `trusted-ci/build-sign.yml` — builds the image from the `Dockerfile`, pushes it to the
+   product-scoped repo `team-bravo/demo-web` in the platform ECR, cosign-keyless-signs it, and attaches a
+   CycloneDX SBOM.
 2. **provenance** → `trusted-ci/slsa-provenance.yml` — attaches the SLSA build provenance (isolated
    signer, SLSA Build L3).
-3. **deploy** — pins the freshly signed digest into `k8s/preprod/deployment.yaml` and commits it; ArgoCD
-   syncs that to the cluster.
+3. **deploy** — pins the freshly signed digest into `k8s/overlays/dev/kustomization.yaml` (`images[].digest`)
+   and commits it; the per-Product ApplicationSet syncs it to the cluster. Promotion to test/uat/staging/prod
+   is by PR (promote-by-PR).
 
 Image signatures, SBOM, and provenance carry this repo's identity (via the `githubWorkflowRepository`
 certificate extension), which the platform's Kyverno `verify-images` / `verify-attestations` policies

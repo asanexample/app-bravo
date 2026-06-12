@@ -21,7 +21,7 @@ jobs:
       contents: read
     uses: asanexample/trusted-ci/.github/workflows/build-sign.yml@61c9f4b56859a85e5d7fedf2db7489dfa446caed
     with:
-      app: demo
+      app: demo-web # product-scoped image team-bravo/demo-web (v3); PR-preview delivery is a separate v3 enhancement
       tag: ${{ github.event.pull_request.head.sha }}
 
   provenance:
