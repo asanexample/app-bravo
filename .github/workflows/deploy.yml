@@ -25,9 +25,10 @@ jobs:
     permissions:
       id-token: write # OIDC: AWS (ECR push) + cosign keyless signing
       contents: read
-    uses: asanexample/trusted-ci/.github/workflows/build-sign.yml@61c9f4b56859a85e5d7fedf2db7489dfa446caed
+    uses: asanexample/trusted-ci/.github/workflows/build-sign.yml@1b181609f5aed2da37573f338d438addc9f253d7
     with:
       app: demo-web # product-scoped image: team-bravo/demo-web (Product "demo", Service "web")
+      product: demo # selects the per-Product OIDC role github-actions-ecr-push-product-bravo-demo (ADR-069)
       tag: ${{ github.sha }}
 
   provenance:
@@ -35,10 +36,11 @@ jobs:
     permissions:
       id-token: write
       contents: read
-    uses: asanexample/trusted-ci/.github/workflows/slsa-provenance.yml@70fc4ba48c7aa66e988ca2d30c2327a2d98f49e7
+    uses: asanexample/trusted-ci/.github/workflows/slsa-provenance.yml@1b181609f5aed2da37573f338d438addc9f253d7
     with:
       image: ${{ needs.build.outputs.image }}
       digest: ${{ needs.build.outputs.digest }}
+      product: demo # selects the per-Product OIDC role github-actions-ecr-push-product-bravo-demo (ADR-069)
 
   # Gated on BOTH build and provenance so the digest the ApplicationSet picks up already carries its signature,
   # SBOM AND provenance — no window where Kyverno's Enforce verify-*-product would reject it.
