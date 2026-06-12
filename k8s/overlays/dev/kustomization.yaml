@@ -9,4 +9,4 @@ replicas:
     count: 1
 images:
   - name: 829808296602.dkr.ecr.us-east-1.amazonaws.com/team-bravo/demo-web
-    newTag: placeholder # CI replaces with the signed digest at deploy (promote-by-PR, #377)
+    digest: sha256:a1bfaf866995ce178cdb065b1d9d1143d927537d108726cab0947c1c633996e3
